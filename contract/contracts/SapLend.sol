@@ -20,13 +20,13 @@ import {SapNFT} from './SapNFT.sol';
 // >> brainstorm -- intentional/accidental no-shows
 // >> lenders are incentivized to show up
 
-enum Duration {
-	14, // 2 weeks
-	30, // 30 days
-	60, // 60 days
-	90, // 90 days
-	180 // 180 days
-}
+// enum Duration {
+// 	14, // 2 weeks
+// 	30, // 30 days
+// 	60, // 60 days
+// 	90, // 90 days
+// 	180 // 180 days
+// }
 
 struct LoanTerm {
     uint256 rate; // interest rate, annualized (APY)
@@ -60,7 +60,7 @@ struct AutoAcceptLoanTerm {
 
 contract SapLend {
 	address immutable public sapNFT; // address where SapNFT.sol is deployed
-
+	LoanTerm[] public activeLoans;
 	// borrower address => auto-accept loan term
 	mapping(address => AutoAcceptLoanTerm) private autoAcceptLoanTerms;
 
@@ -71,6 +71,19 @@ contract SapLend {
 		sapNFT = _sapNFT;
 	}
 	
+    event LoanCreated(uint indexed loanId, uint nft, uint interest, uint startTime, uint216 borrowed);
+
+	
+	//puts an ID to the loan
+	function getLoanId(
+        uint nftId,
+        uint interest,
+        uint startTime,
+        uint216 price
+    ) public pure returns (uint id) {
+        return uint(keccak256(abi.encode(nftId, interest, startTime, price)));
+    }
+
 	/// @dev Borrower initiates the loan term
 	function initiateIntentToBorrow(
 		uint256 rate,
@@ -91,7 +104,7 @@ contract SapLend {
 		
 		// 1) Register borrower's intent to borrow
         address borrower = msg.sender;
-		borrowWannabes.push(borrower)
+		borrowWannabes.push(borrower);
 
 		// 2) Transfer borrower's NFT to our contract
         IERC721(nft).safeTransferFrom(msg.sender, address(this), tokenId);
@@ -113,7 +126,38 @@ contract SapLend {
 		
 		autoAccepts[msg.sender] = loanTerm;
 	}
-    
+
+	function borrow(
+		uint256 rate,
+		uint256 valuation,
+		uint256 cratio,
+		address nft,
+		uint256 tokenId,
+		Duration minDuration,
+		Duration maxDuration
+	) public {
+		uint id = getLoanId(tokenId, rate, block.timestamp, valuation);
+        
+		require(!_exists(id), "ERC721: token already minted");
+        
+		LoanTerm aaLoanTerm = LoanTerm({
+			 rate : rate,
+			 valuation : valuation ,
+			 cratio : cratio,
+			 nft : nft,
+			 tokenId : tokenId,
+			 minDuration : minDuration,
+			 maxDuration : maxDuration
+		});
+		
+		activeLoans.push(aaLoanTerm);		
+		
+		// _owners[id] = msg.sender;
+
+        emit LoanCreated(id, nftId, interest, block.timestamp, price);
+        emit Transfer(address(0), msg.sender, id);
+        IERC721(this).transferFrom(msg.sender, address(this), nftId);
+	}
 
 		function _isERC721(address nftAddress) internal view returns (bool) {
         return nftAddress.supportsInterface(type(IERC721).interfaceId);
