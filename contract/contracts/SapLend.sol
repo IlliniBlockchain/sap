@@ -2,6 +2,7 @@
 pragma solidity ^0.8.9;
 
 import {IERC721} from '@openzeppelin/contracts/token/ERC721/IERC721.sol';
+import {ERC721} from '@openzeppelin/contracts/token/ERC721/ERC721.sol';
 
 import {SapNFT} from './SapNFT.sol';
 
@@ -20,13 +21,13 @@ import {SapNFT} from './SapNFT.sol';
 // >> brainstorm -- intentional/accidental no-shows
 // >> lenders are incentivized to show up
 
-// enum Duration {
-// 	14, // 2 weeks
-// 	30, // 30 days
-// 	60, // 60 days
-// 	90, // 90 days
-// 	180 // 180 days
-// }
+enum Duration {
+	days14, // 2 weeks
+	days30, // 30 days
+	days60, // 60 days
+	days90, // 90 days
+	days180 // 180 days
+}
 
 struct LoanTerm {
     uint256 rate; // interest rate, annualized (APY)
@@ -116,15 +117,19 @@ contract SapLend {
 		require(success, 'Minting of NFT failed!');
 
 		// 4) Save the auto-accept loan term data in our contract
-		AutoAcceptLoanTerm aaLoanTerm = AutoAcceptLoanTerm({
-			rate: rate,
-			valuation: valuation,
-			cratio: cratio,
+		AutoAcceptLoanTerm calldata aaLoanTerm = AutoAcceptLoanTerm({
+			rate : rate,
+			valuation : valuation,
+			cratio : cratio,
+			nft : nft,
+			tokenId : tokenId,
 			borrower: msg.sender,
-			duration: duration
+			minDuration : minDuration,
+			maxDuration : maxDuration
 		});
 		
-		autoAccepts[msg.sender] = loanTerm;
+	
+		autoAcceptLoanTerms[msg.sender] = aaLoanTerm;
 	}
 
 	function borrow(
@@ -138,7 +143,7 @@ contract SapLend {
 	) public {
 		uint id = getLoanId(tokenId, rate, block.timestamp, valuation);
         
-		require(!_exists(id), "ERC721: token already minted");
+		// require(!_exists(id), "ERC721: token already minted");
         
 		LoanTerm aaLoanTerm = LoanTerm({
 			 rate : rate,
@@ -152,11 +157,9 @@ contract SapLend {
 		
 		activeLoans.push(aaLoanTerm);		
 		
-		// _owners[id] = msg.sender;
-
-        emit LoanCreated(id, nftId, interest, block.timestamp, price);
-        emit Transfer(address(0), msg.sender, id);
-        IERC721(this).transferFrom(msg.sender, address(this), nftId);
+        emit LoanCreated(id, tokenId, rate, block.timestamp, valuation);
+        // emit Transfer(address(0), msg.sender, id);
+        IERC721(this).transferFrom(msg.sender, address(this), tokenId);
 	}
 
 		function _isERC721(address nftAddress) internal view returns (bool) {

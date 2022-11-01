@@ -2,14 +2,18 @@
 pragma solidity ^0.8.9;
 
 import {IERC721} from '@openzeppelin/contracts/token/ERC721/IERC721.sol';
+import {ERC721} from '@openzeppelin/contracts/token/ERC721/ERC721.sol';
 
 struct MirroredNFT {
-	address owner,
-	address nft,
-	uint256 tokenId
+	address owner;
+	address nft;
+	uint256 tokenId;
 }
 
-contract SapNFT is IERC721 {
+error NonTransferableNFT();
+error ProhibitedMintFunction();
+
+contract SapNFT is ERC721 {
 	uint256 tokenIdCounter = 0;
 
 	/// @dev Stores the data of each NFT (mapped by NFT token ID)
@@ -48,7 +52,7 @@ contract SapNFT is IERC721 {
 	/// @dev Mint a NFT that mirrors user's NFT
 	/// @dev Delegatecall, so using msg.sender gives the borrower's address
 	function mint(address userNFT, uint256 userTokenId) public override onlyOwner {
-        require(!_exists(tokenId), 'Token ID already exists');
+        require(!_exists(userTokenId), 'Token ID already exists');
 		_safeMint(msg.sender, tokenIdCounter);
 
 		// NOTE: This check isn't necessary? because
