@@ -21,11 +21,11 @@ import {SapNFT} from './SapNFT.sol';
 // >> lenders are incentivized to show up
 
 enum Duration {
-	14, // 2 weeks
-	30, // 30 days
-	60, // 60 days
-	90, // 90 days
-	180 // 180 days
+	14, 
+	30,
+	60,
+	90, 
+	180
 }
 
 struct LoanTerm {
@@ -61,14 +61,17 @@ struct AutoAcceptLoanTerm {
 contract SapLend {
 	address immutable public sapNFT; // address where SapNFT.sol is deployed
 
+	address immutable public oracleAddress; // consider making mutable so that only owner (deployer of contract) can change it
+
 	// borrower address => auto-accept loan term
 	mapping(address => AutoAcceptLoanTerm) private autoAcceptLoanTerms;
 
 	// active list of users who want to borrow
 	address[] public borrowWannabes;
 
-	constructor(address _sapNFT) {
+	constructor(address _sapNFT, address _oracleAddress) {
 		sapNFT = _sapNFT;
+		oracleAddress = _oracleAddress; 
 	}
 	
 	/// @dev Borrower initiates the loan term
@@ -118,4 +121,32 @@ contract SapLend {
 		function _isERC721(address nftAddress) internal view returns (bool) {
         return nftAddress.supportsInterface(type(IERC721).interfaceId);
     }
+
+	// Will check signature to make sure that the wallet in our server has signed off on this price, 
+	// relatively centralized method . . . will look to iterate upon this in the future
+	// We are essentially functioning as our own oracle at this point
+
+	function validatePrice(uint216 price, uint256 deadline, uint8 v, bytes32 r, bytes32 s) public view { 
+        require(block.timestamp < deadline, "deadline over");
+        require(
+            ecrecover(
+                keccak256(
+                    abi.encodePacked(
+                        "\x19Ethereum Signed Message:\n111",
+                        price,
+                        deadline,
+                        block.chainid,
+                        address(nftContract)
+                    )
+                ),
+                v,
+                r,
+                s
+            ) == oracleAddress,
+            "not signed by Illini Blockchain oracle!"
+        );
+        // require(price < maxPrice, "max price"); 
+		// the Max Price seems like a safety switch to stop all new liquidations . . .
+    }
+
 }
