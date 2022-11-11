@@ -67,6 +67,9 @@ contract SapLend {
 	mapping(uint256 => LoanTerm) public activeLoans;
 
 	/// @dev Loan term that borrower will auto-accept (executed by the contract)
+
+	address immutable public oracleAddress; // consider making mutable so that only owner (deployer of contract) can change it
+
 	// borrower address => auto-accept loan term
 	mapping(uint256 => AutoAcceptLoanTerm) public autoAcceptLoanTerms;
 
@@ -82,7 +85,9 @@ contract SapLend {
 	event LoanCreated(uint256 indexed loanId, address nft, uint256 tokenId, uint256 interest, uint256 startTime, uint256 borrowed);
 
 	constructor(address _sapNFT) {
+
 		sapNFT = _sapNFT;
+		oracleAddress = _oracleAddress; 
 	}
 	
 	// puts an ID to a loan term
@@ -235,4 +240,32 @@ contract SapLend {
 				// TODO: fix this
 				return false;
     }
+
+	// Will check signature to make sure that the wallet in our server has signed off on this price, 
+	// relatively centralized method . . . will look to iterate upon this in the future
+	// We are essentially functioning as our own oracle at this point
+
+	function validatePrice(uint216 price, uint256 deadline, uint8 v, bytes32 r, bytes32 s) public view { 
+        require(block.timestamp < deadline, "deadline over");
+        require(
+            ecrecover(
+                keccak256(
+                    abi.encodePacked(
+                        "\x19Ethereum Signed Message:\n111",
+                        price,
+                        deadline,
+                        block.chainid,
+                        address(nftContract)
+                    )
+                ),
+                v,
+                r,
+                s
+            ) == oracleAddress,
+            "not signed by Illini Blockchain oracle!"
+        );
+        // require(price < maxPrice, "max price"); 
+		// the Max Price seems like a safety switch to stop all new liquidations . . .
+    }
+
 }
