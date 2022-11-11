@@ -33,7 +33,7 @@ enum Duration {
 
 struct LoanTerm {
     uint256 rate; // interest rate, annualized (APY)
-		uint256 start; // start date of loan
+	uint256 start; // start date of loan
     Duration duration; // total duration of loan (in seconds)
     uint256 cvalue; // collateral value (value of NFT at the time of the loan bid creation)
     // uint256 cratio; // collateral ratio
@@ -165,7 +165,7 @@ contract SapLend {
 		uint256 rate,
 		Duration duration,
 		uint256 value,
-		uint256 loanId,
+		uint256 loanId, /// @dev TODO don't know if this should be here
 		uint256 maxBorrowAmount
 	) public {
 		require(rate <= rateCap(), 'Exceeds rate cap!');
@@ -223,6 +223,25 @@ contract SapLend {
 		activeLoanIds.push(loanBidId);
 	}
 
+	// Kevin
+	function closeLoan() public {
+	}
+
+	// Antony
+	// Check if they have an intent to borrow active
+	// Close out any active bids (closeBid())
+	// Borrower pays
+	function closeIntentToBorrow() public {
+	}
+
+	// Manas
+	// Check if they have an active bid
+	// close it and remove it from the active bid list
+	// 
+	function closeBid() public {
+	}
+
+	//
 	function checkOracle() public {
 	}
 
