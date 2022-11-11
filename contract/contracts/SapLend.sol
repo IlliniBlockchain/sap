@@ -232,6 +232,7 @@ contract SapLend {
 	// Close out any active bids (closeBid())
 	// Borrower pays
 	function closeIntentToBorrow() public {
+		// Putting this comment to open up branch on GH, Jongwon leave comments here
 	}
 
 	// Manas
