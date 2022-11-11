@@ -84,8 +84,7 @@ contract SapLend {
 
 	event LoanCreated(uint256 indexed loanId, address nft, uint256 tokenId, uint256 interest, uint256 startTime, uint256 borrowed);
 
-	constructor(address _sapNFT) {
-
+	constructor(address _sapNFT, address _oracleAddress) {
 		sapNFT = _sapNFT;
 		oracleAddress = _oracleAddress; 
 	}
@@ -245,7 +244,7 @@ contract SapLend {
 	// relatively centralized method . . . will look to iterate upon this in the future
 	// We are essentially functioning as our own oracle at this point
 
-	function validatePrice(uint216 price, uint256 deadline, uint8 v, bytes32 r, bytes32 s) public view { 
+	function validatePrice(uint216 price, uint256 deadline, uint8 v, bytes32 r, bytes32 s, address nftContract) public view { 
         require(block.timestamp < deadline, "deadline over");
         require(
             ecrecover(
