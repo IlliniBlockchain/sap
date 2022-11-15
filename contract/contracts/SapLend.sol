@@ -169,7 +169,7 @@ contract SapLend {
 		uint256 maxBorrowAmount
 	) public {
 		require(rate <= rateCap(), 'Exceeds rate cap!');
-
+		// creates the loanterm (lender does this)
 		LoanTerm memory loanTerm = LoanTerm({
 			 rate: rate,
 			 start: 0, // start is when loan is accepted by borrower
@@ -179,9 +179,9 @@ contract SapLend {
 			 loanId: loanId,
 			 maxBorrowAmount: maxBorrowAmount
 		});
-
+		// create the autoaccept loan term
 		AutoAcceptLoanTerm memory aaLoanTerm = autoAcceptLoanTerms[loanId];
-
+		// create the bid and put it in the array
 		uint256 loanBidId = getLoanBidId(
 			aaLoanTerm.nft,
 			aaLoanTerm.tokenId,
@@ -211,13 +211,13 @@ contract SapLend {
 			uint256 valuation;
 		*/
 
-		uint256 loanId = activeLoans[loanBidId].loanId;
-		require(loanId == 0, 'Loan already exists for the ID.');
+		uint256 loanId = activeLoans[loanBidId].loanId; //gets the loan id through the map
+		require(loanId == 0, 'Loan already exists for the ID.'); // require that a loan doesn't already exist
 
-		AutoAcceptLoanTerm memory aaLoanTerm = autoAcceptLoanTerms[loanId];
-		require(msg.sender == aaLoanTerm.borrower, 'Sender is not the initiated borrower.');
+		AutoAcceptLoanTerm memory aaLoanTerm = autoAcceptLoanTerms[loanId]; //accept the loanterm
+		require(msg.sender == aaLoanTerm.borrower, 'Sender is not the initiated borrower.'); // make sure that the borrower is calling this function
 
-		LoanTerm memory loanTerm = activeLoanBids[loanId][loanBidId];
+		LoanTerm memory loanTerm = activeLoanBids[loanId][loanBidId]; //store loan term and push it to activeloanids
 
 		// TODO: actual borrowing part
 		activeLoanIds.push(loanBidId);
@@ -235,10 +235,13 @@ contract SapLend {
 	}
 
 	// Manas
-	// Check if they have an active bid
-	// close it and remove it from the active bid list
-	// 
-	function closeBid() public {
+	// Passes in the ID of the loan
+	function closeBid(
+		uint256 loanId,
+		uint256 loanBidId
+	) public {
+		// need some require statement to check if it exists within the map or not, will have to work this out later
+		delete activeLoanBids[loanId][loanBidId]; //deletes the bid
 	}
 
 	//
