@@ -31,6 +31,8 @@ enum Duration {
 	days180 // 180 days
 }
 
+// TODO HAVE TO ADD TOKEN IDs to all of these  . . .
+
 struct LoanTerm {
     uint256 rate; // interest rate, annualized (APY)
 	uint256 start; // start date of loan
@@ -40,6 +42,7 @@ struct LoanTerm {
     address lender; //lender's address
     uint256 loanId; // associated loan ID
     uint256 maxBorrowAmount; // max value amount
+	address nft; // nft address
 }
 
 struct BidTerm {
@@ -51,6 +54,7 @@ struct BidTerm {
     address lender; //lender's address
     uint256 IntentId; // associated loan ID
     uint256 maxBorrowAmount; // max value amount
+	address nft; // nft address
 }
 
 // Ask Allan: how do we agree on duration of the loan?
@@ -179,7 +183,8 @@ contract SapLend {
 		uint256 value,
 		uint256 IntentId, 
 		uint256 maxBorrowAmount,
-		address burrower
+		address burrower,
+		address nft
 	) public {
 		require(rate <= rateCap(), 'Exceeds rate cap!');
 
@@ -190,8 +195,8 @@ contract SapLend {
 			 cvalue: value, // value of NFT
 			 lender: msg.sender,
 			 IntentId: IntentId,
-			 maxBorrowAmount: maxBorrowAmount
-
+			 maxBorrowAmount: maxBorrowAmount,
+			 nft: nft
 		});
 
 		AutoAcceptLoanTerm memory aaLoanTerm = autoAcceptLoanTerms[burrower];
@@ -212,7 +217,7 @@ contract SapLend {
 	}
 
 	/// @dev Borrower accepts any loan term associated to their intent to borrow
-	function acceptBorrow(
+	function takeBid(
 		uint256 BidId
 	) public {
 		/*
@@ -228,15 +233,36 @@ contract SapLend {
 			uint256 valuation;
 		*/
 
+		// checking that the bid was not already taken . . . making sure it is still available for taking
 		uint256 loanId = activeLoans[BidId].loanId;
 		require(loanId == 0, 'Loan already exists for the ID.');
 
-		AutoAcceptLoanTerm memory aaLoanTerm = autoAcceptLoanTerms[loanId];
-		require(msg.sender == aaLoanTerm.borrower, 'Sender is not the initiated borrower.');
 
-		LoanTerm memory loanTerm = activeLoanBids[loanId][loanBidId];
+		// making sure that burrower can take this bid
+		AutoAcceptLoanTerm memory aaLoanTerm = autoAcceptLoanTerms[loanId];
+		require(msg.sender == aaLoanTerm.borrower, 'Sender is not the initiated borrower.'); 
+
+		BidTerm memory bidTerm = activeLoanBids[aaLoanTerm.burrower][BidId];
 
 		// TODO: actual borrowing part
+
+		LoanTerm memory loanTerm = LoanTerm ({
+			rate : bidTerm.rate, // interest rate, annualized (APY)
+			start : block.timestamp, // start date of loan
+			duration : bidTerm.duration, // total duration of loan (in seconds)
+			cvalue : bidTerm.cvalue, // collateral value (value of NFT at the time of the loan bid creation)
+			lender : bidTerm.lender, //lender's address
+			loanID : bidTerm.IntentId, // associated loan ID
+			maxBorrowAmount : bidTerm.maxBorrowAmount, // max value amount
+			nft : bidTerm.nft
+		}); 
+
+		uint256 loanID = getLoanId(address nft,
+		uint256 tokenId,
+		address borrower,
+		Duration minDuration,
+		uint256 start)
+
 		activeLoanIds.push(loanBidId);
 	}
 
