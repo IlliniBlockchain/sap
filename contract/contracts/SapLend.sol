@@ -63,6 +63,9 @@ contract SapLend {
 	/// @dev List of active loan IDs
 	uint256[] public activeLoanIds;
 
+	///@dev list of open intents to borrow
+	AutoAcceptLoanTerm[] public intentsToBorrow;
+
 	/// @dev Mapping of loan ID to active loan term
 	mapping(uint256 => LoanTerm) public activeLoans;
 
@@ -72,6 +75,7 @@ contract SapLend {
 
 	// borrower address => auto-accept loan term
 	mapping(uint256 => AutoAcceptLoanTerm) public autoAcceptLoanTerms;
+
 
 	/// @dev List of active loan bids
 	uint256[] public activeLoanBidIds;
@@ -84,7 +88,7 @@ contract SapLend {
 
 	event LoanCreated(uint256 indexed loanId, address nft, uint256 tokenId, uint256 interest, uint256 startTime, uint256 borrowed);
 
-	constructor(address _sapNFT) {
+	constructor(address _sapNFT, address _oracleAddress) {
 
 		sapNFT = _sapNFT;
 		oracleAddress = _oracleAddress; 
@@ -111,6 +115,11 @@ contract SapLend {
 		uint256 initatedTime
 	) public pure returns (uint256 id) {
 		return uint256(keccak256(abi.encode(nft, tokenId, lender, duration, maxBorrowAmount, initatedTime)));
+	}
+
+	///@dev Returns list of intents to borrow,
+	function viewIntentsToBorrow() public view returns (AutoAcceptLoanTerm[] memory activeLoanTerm) {
+		return intentsToBorrow;
 	}
 
 	/// @dev Borrower initiates the loan term
@@ -158,6 +167,7 @@ contract SapLend {
 	
 		uint256 loanId = getLoanId(nft, tokenId, borrower, minDuration, block.timestamp);
 		autoAcceptLoanTerms[loanId] = aaLoanTerm;
+		intentsToBorrow.push(aaLoanTerm);
 	}
 
 	/// @dev Lender comes in and makes a bid to give the borrower x amount of money
@@ -245,7 +255,7 @@ contract SapLend {
 	// relatively centralized method . . . will look to iterate upon this in the future
 	// We are essentially functioning as our own oracle at this point
 
-	function validatePrice(uint216 price, uint256 deadline, uint8 v, bytes32 r, bytes32 s) public view { 
+	function validatePrice(uint216 price, uint256 deadline, uint8 v, bytes32 r, bytes32 s, address nftContract) public view { 
         require(block.timestamp < deadline, "deadline over");
         require(
             ecrecover(
