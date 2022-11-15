@@ -42,6 +42,17 @@ struct LoanTerm {
     uint256 maxBorrowAmount; // max value amount
 }
 
+struct BidTerm {
+	uint256 rate; // interest rate, annualized (APY)
+	uint256 proposedTime; // start date of loan
+    Duration duration; // total duration of loan (in seconds)
+    uint256 cvalue; // collateral value (value of NFT at the time of the loan bid creation)
+    // uint256 cratio; // collateral ratio
+    address lender; //lender's address
+    uint256 IntentId; // associated loan ID
+    uint256 maxBorrowAmount; // max value amount
+}
+
 // Ask Allan: how do we agree on duration of the loan?
 // Ask Allan: liquidation engine?
 // Ask Allan (maybe): Should we transfer NFT to our contract when user intens to borrow?
@@ -55,10 +66,12 @@ struct AutoAcceptLoanTerm {
 	uint256 tokenId;
 	Duration minDuration;
 	Duration maxDuration;
+	uint256 proposedTime;
 }
 
 contract SapLend {
 	address immutable public sapNFT; // address where SapNFT.sol is deployed
+	address immutable public oracleAddress; // address of our in house oracle
 
 	/// @dev List of active loan IDs
 	uint256[] public activeLoanIds;
@@ -68,16 +81,14 @@ contract SapLend {
 
 	/// @dev Loan term that borrower will auto-accept (executed by the contract)
 
-	address immutable public oracleAddress; // consider making mutable so that only owner (deployer of contract) can change it
-
-	// borrower address => auto-accept loan term
-	mapping(uint256 => AutoAcceptLoanTerm) public autoAcceptLoanTerms;
+	//  burrower address => auto-accept loan term
+	mapping(address => AutoAcceptLoanTerm) public autoAcceptLoanTerms;
 
 	/// @dev List of active loan bids
-	uint256[] public activeLoanBidIds;
+	// uint256[] public activeLoanBidIds;
 
 	/// @dev Mapping of loan ID to available bids (proposed by lenders)
-	mapping(uint256 => mapping(uint256 => LoanTerm)) public activeLoanBids;
+	mapping(address => mapping(uint256 => BidTerm)) public activeLoanBids;
 
 	// active list of users who want to borrow
 	address[] public borrowWannabes;
@@ -101,15 +112,15 @@ contract SapLend {
 	}
 	
 	// puts an ID to a loan bid
-	function getLoanBidId(
+	function getBidTermId(
 		address nft,
 		uint256 tokenId,
 		address lender,
 		Duration duration,
 		uint256 maxBorrowAmount,
-		uint256 initatedTime
+		uint256 proposedTime
 	) public pure returns (uint256 id) {
-		return uint256(keccak256(abi.encode(nft, tokenId, lender, duration, maxBorrowAmount, initatedTime)));
+		return uint256(keccak256(abi.encode(nft, tokenId, lender, duration, maxBorrowAmount, proposedTime)));
 	}
 
 	/// @dev Borrower initiates the loan term
@@ -152,37 +163,40 @@ contract SapLend {
 			tokenId : tokenId,
 			borrower: msg.sender,
 			minDuration : minDuration,
-			maxDuration : maxDuration
+			maxDuration : maxDuration,
+			proposedTime : block.timestamp
 		});
 	
-		uint256 loanId = getLoanId(nft, tokenId, borrower, minDuration, block.timestamp);
-		autoAcceptLoanTerms[loanId] = aaLoanTerm;
+		// uint256 IntentId = getLoanId(nft, tokenId, borrower, minDuration, block.timestamp);
+		autoAcceptLoanTerms[msg.sender] = aaLoanTerm;
 	}
 
 	/// @dev Lender comes in and makes a bid to give the borrower x amount of money
 	/// Returns an array with index 0 being the interest rate (whole numbers only) and index 1 being the bidded borrowing value 
-	function proposeLoanTerm( // ie., bidLoanTermForBorrower
+	function makeBid( // ie., bidLoanTermForBorrower
 		uint256 rate,
 		Duration duration,
 		uint256 value,
-		uint256 loanId, /// @dev TODO don't know if this should be here
-		uint256 maxBorrowAmount
+		uint256 IntentId, 
+		uint256 maxBorrowAmount,
+		address burrower
 	) public {
 		require(rate <= rateCap(), 'Exceeds rate cap!');
 
-		LoanTerm memory loanTerm = LoanTerm({
+		BidTerm memory bidterm = BidTerm({
 			 rate: rate,
-			 start: 0, // start is when loan is accepted by borrower
+			 proposedTime: block.timestamp, // start is when loan is accepted by borrower
 			 duration: duration,
 			 cvalue: value, // value of NFT
 			 lender: msg.sender,
-			 loanId: loanId,
+			 IntentId: IntentId,
 			 maxBorrowAmount: maxBorrowAmount
+
 		});
 
-		AutoAcceptLoanTerm memory aaLoanTerm = autoAcceptLoanTerms[loanId];
+		AutoAcceptLoanTerm memory aaLoanTerm = autoAcceptLoanTerms[burrower];
 
-		uint256 loanBidId = getLoanBidId(
+		uint256 BidTermId = getBidTermId(
 			aaLoanTerm.nft,
 			aaLoanTerm.tokenId,
 			msg.sender,
@@ -191,12 +205,15 @@ contract SapLend {
 			block.timestamp
 		);
 
-		activeLoanBids[loanId][loanBidId] = loanTerm;
+		// @Dev TODO : in the case that the bid has ALL better terms, initiate the loan and don't do bidding
+
+		activeLoanBids[burrower][BidTermId] = bidterm;
+
 	}
 
 	/// @dev Borrower accepts any loan term associated to their intent to borrow
 	function acceptBorrow(
-		uint256 loanBidId
+		uint256 BidId
 	) public {
 		/*
 			uint256 rate; // interest rate, annualized (APY)
@@ -211,7 +228,7 @@ contract SapLend {
 			uint256 valuation;
 		*/
 
-		uint256 loanId = activeLoans[loanBidId].loanId;
+		uint256 loanId = activeLoans[BidId].loanId;
 		require(loanId == 0, 'Loan already exists for the ID.');
 
 		AutoAcceptLoanTerm memory aaLoanTerm = autoAcceptLoanTerms[loanId];
@@ -225,6 +242,7 @@ contract SapLend {
 
 	// Kevin
 	function closeLoan() public {
+
 	}
 
 	// Antony
@@ -233,6 +251,7 @@ contract SapLend {
 	// Borrower pays
 	function closeIntentToBorrow() public {
 		// Putting this comment to open up branch on GH, Jongwon leave comments here
+		
 	}
 
 	// Manas
