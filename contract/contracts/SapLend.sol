@@ -38,11 +38,12 @@ struct LoanTerm {
 	uint256 start; // start date of loan
     Duration duration; // total duration of loan (in seconds)
     uint256 cvalue; // collateral value (value of NFT at the time of the loan bid creation)
-    // uint256 cratio; // collateral ratio
+    uint256 cratio; // collateral ratio
     address lender; //lender's address
     uint256 loanId; // associated loan ID
-    uint256 maxBorrowAmount; // max value amount
+    uint256 BorrowedAmount; // max value amount
 	address nft; // nft address
+	uint256 tokenId;
 }
 
 struct BidTerm {
@@ -50,11 +51,12 @@ struct BidTerm {
 	uint256 proposedTime; // start date of loan
     Duration duration; // total duration of loan (in seconds)
     uint256 cvalue; // collateral value (value of NFT at the time of the loan bid creation)
-    // uint256 cratio; // collateral ratio
+    uint256 cratio; // collateral ratio
     address lender; //lender's address
     uint256 IntentId; // associated loan ID
     uint256 maxBorrowAmount; // max value amount
 	address nft; // nft address
+	uint256 tokenId;
 }
 
 // Ask Allan: how do we agree on duration of the loan?
@@ -63,19 +65,24 @@ struct BidTerm {
 
 struct AutoAcceptLoanTerm {
 	uint256 rate;
-	uint256 valuation;
+	uint256 proposedTime;
+	uint256 cvalue;
 	uint256 cratio; // 0 - 100% ==> two decimal places (0 - 100) * 100
+	uint256 requestedAmount;
 	address borrower;
-	address nft;
-	uint256 tokenId;
 	Duration minDuration;
 	Duration maxDuration;
-	uint256 proposedTime;
+	address nft;
+	uint256 tokenId;
 }
 
 contract SapLend {
-	address immutable public sapNFT; // address where SapNFT.sol is deployed
-	address immutable public oracleAddress; // address of our in house oracle
+
+	/// @dev address where SapNFT.sol is deployed, set in constructor
+	address immutable public sapNFT; 
+
+	/// @dev address of our "inhouse" oracle, set in constructor
+	address immutable public oracleAddress; 
 
 	/// @dev List of active loan IDs
 	uint256[] public activeLoanIds;
@@ -83,18 +90,23 @@ contract SapLend {
 	/// @dev Mapping of loan ID to active loan term
 	mapping(uint256 => LoanTerm) public activeLoans;
 
-	/// @dev Loan term that borrower will auto-accept (executed by the contract)
+	/// @dev Mapping of Bid Term ID to BidTerm
+	mapping (uint256 => BidTerm) public BidTerms;
 
+	/// @dev Loan term that borrower will auto-accept (executed by the contract)
 	//  burrower address => auto-accept loan term
 	mapping(address => AutoAcceptLoanTerm) public autoAcceptLoanTerms;
 
-	/// @dev List of active loan bids
+	/// @dev List of active loan bids - not supporting multiple bids yet
 	// uint256[] public activeLoanBidIds;
 
 	/// @dev Mapping of loan ID to available bids (proposed by lenders)
-	mapping(address => mapping(uint256 => BidTerm)) public activeLoanBids;
+	mapping(address => mapping(uint256 => uint256)) public activeLoanBidIds;
 
-	// active list of users who want to borrow
+	/// @dev Mapping of bidder address to their BidTerm ID - not supporting multiple bids yet
+	mapping (address => uint256) userActiveBidId;
+
+	/// @dev active list of users who want to borrow
 	address[] public borrowWannabes;
 
 	event LoanCreated(uint256 indexed loanId, address nft, uint256 tokenId, uint256 interest, uint256 startTime, uint256 borrowed);
@@ -130,8 +142,9 @@ contract SapLend {
 	/// @dev Borrower initiates the loan term
 	function initiateIntentToBorrow(
 		uint256 rate,
-		uint256 valuation,
+		uint256 cvalue,
 		uint256 cratio,
+		uint256 requestedAmount,
 		address nft,
 		uint256 tokenId,
 		Duration minDuration,
@@ -144,6 +157,10 @@ contract SapLend {
 		require(cratio <= 10000, 'C-Ratio must be 100% or less');
 		// Require that minDuration index is smaller or equal to maxDuration index
 		require(uint(minDuration) <= uint(minDuration), 'Min duration <= Max Duration');
+
+		// Antony is adding this CHECK TO MAKE SURE WE NEED THIS
+		uint256 healthFactor = requestedAmount / cvalue;
+		require (healthFactor <= cvalue, "Can't burrow that much based on inputs for cvalue and cratio!");
 		
 		// 1) Register borrower's intent to borrow
         address borrower = msg.sender;
@@ -161,14 +178,15 @@ contract SapLend {
 		// 4) Save the auto-accept loan term data in our contract
 		AutoAcceptLoanTerm memory aaLoanTerm = AutoAcceptLoanTerm({
 			rate : rate,
-			valuation : valuation,
+			proposedTime : block.timestamp,
+			cvalue : cvalue,
 			cratio : cratio,
-			nft : nft,
-			tokenId : tokenId,
+			requestedAmount : requestedAmount,
 			borrower: msg.sender,
 			minDuration : minDuration,
 			maxDuration : maxDuration,
-			proposedTime : block.timestamp
+			nft : nft,
+			tokenId: tokenId
 		});
 	
 		// uint256 IntentId = getLoanId(nft, tokenId, borrower, minDuration, block.timestamp);
@@ -181,22 +199,28 @@ contract SapLend {
 		uint256 rate,
 		Duration duration,
 		uint256 value,
-		uint256 IntentId, 
+		uint256 cratio,
+		uint256 IntentId, // forgot why we put this . . .
 		uint256 maxBorrowAmount,
 		address burrower,
-		address nft
+		address nft,
+		uint256 tokenId
 	) public {
 		require(rate <= rateCap(), 'Exceeds rate cap!');
+
+		require(userActiveBidId[msg.sender] == 0); // makes sure that the bidder (the lender) doesn't already have an open bid
 
 		BidTerm memory bidterm = BidTerm({
 			 rate: rate,
 			 proposedTime: block.timestamp, // start is when loan is accepted by borrower
 			 duration: duration,
 			 cvalue: value, // value of NFT
+			 cratio: cratio,
 			 lender: msg.sender,
 			 IntentId: IntentId,
 			 maxBorrowAmount: maxBorrowAmount,
-			 nft: nft
+			 nft: nft,
+			 tokenId : tokenId
 		});
 
 		AutoAcceptLoanTerm memory aaLoanTerm = autoAcceptLoanTerms[burrower];
@@ -210,9 +234,14 @@ contract SapLend {
 			block.timestamp
 		);
 
-		// @Dev TODO : in the case that the bid has ALL better terms, initiate the loan and don't do bidding
+		/// @dev TODO : in the case that the bid has ALL better terms, initiate the loan and don't do bidding
 
-		activeLoanBids[burrower][BidTermId] = bidterm;
+
+		// adding to mapping from bidTermId to bidterm structs
+		BidTerms[BidTermId] = bidterm;
+
+		// adding to activeLoanBids . . . don't love this name
+		activeLoanBidIds[burrower][BidTermId] = BidTermId;
 
 	}
 
@@ -242,7 +271,7 @@ contract SapLend {
 		AutoAcceptLoanTerm memory aaLoanTerm = autoAcceptLoanTerms[loanId];
 		require(msg.sender == aaLoanTerm.borrower, 'Sender is not the initiated borrower.'); 
 
-		BidTerm memory bidTerm = activeLoanBids[aaLoanTerm.burrower][BidId];
+		BidTerm memory bidTerm = activeLoanBidIds[aaLoanTerm.burrower][BidId];
 
 		// TODO: actual borrowing part
 
@@ -257,13 +286,13 @@ contract SapLend {
 			nft : bidTerm.nft
 		}); 
 
-		uint256 loanID = getLoanId(address nft,
-		uint256 tokenId,
-		address borrower,
-		Duration minDuration,
-		uint256 start)
+		// uint256 loanID = getLoanId(address nft,
+		// uint256 tokenId,
+		// address borrower,
+		// Duration minDuration,
+		// uint256 start);
 
-		activeLoanIds.push(loanBidId);
+		// activeLoanIds.push(loanBidId);
 	}
 
 	// Kevin
@@ -277,7 +306,11 @@ contract SapLend {
 	// Borrower pays
 	function closeIntentToBorrow() public {
 		// Putting this comment to open up branch on GH, Jongwon leave comments here
-		
+		AutoAcceptLoanTerm memory aaLoanTerm = autoAcceptLoanTerms[msg.sender];
+		require(aaLoanTerm.burrower != address(0), "User does not have an open intent to burrow!"); // Ask Jongwon to make sure this is doing what is should
+		require(aaLoanTerm.burrower == msg.sender, "The user can only close out their own intentToBurrows");
+
+
 	}
 
 	// Manas
