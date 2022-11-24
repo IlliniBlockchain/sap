@@ -108,7 +108,7 @@ contract SapLend {
 	mapping (address => uint256) userActiveBidId;
 
 	/// @dev Mapping of address to mapping of intent ID to array of available bids Ids(proposed by lenders)
-	// not sure we even need the double mapping with the burrower address
+	//  not sure we even need the double mapping with the burrower address
 	mapping(address => mapping(uint256 => uint256[])) public activeLoanBidIds;
 
 
@@ -254,10 +254,10 @@ contract SapLend {
 		bidTerms[BidTermId] = bidterm;
 
 		// getting reference to the array where available bids are stored (storage keyword gets reference)
-		uint256[] storage availableBids = activeLoanBidIds[borrower][intentId];
+		uint256[] storage openBids = activeLoanBidIds[borrower][intentId];
 
 		// adding bid term Id to available Bids
-		availableBids.push(BidTermId);
+		openBids.push(BidTermId);
 
 	}
 
@@ -287,20 +287,20 @@ contract SapLend {
 		AutoAcceptLoanTerm memory aaLoanTerm = autoAcceptLoanTerms[loanId];
 		require(msg.sender == aaLoanTerm.borrower, 'Sender is not the initiated borrower.'); 
 
-		BidTerm memory bidTerm = activeLoanBidIds[aaLoanTerm.burrower][BidId];
+		// BidTerm memory bidTerm = activeLoanBidIds[aaLoanTerm.burrower][BidId];
 
 		// TODO: actual borrowing part
 
-		LoanTerm memory loanTerm = LoanTerm ({
-			rate : bidTerm.rate, // interest rate, annualized (APY)
-			start : block.timestamp, // start date of loan
-			duration : bidTerm.duration, // total duration of loan (in seconds)
-			cvalue : bidTerm.cvalue, // collateral value (value of NFT at the time of the loan bid creation)
-			lender : bidTerm.lender, //lender's address
-			loanID : bidTerm.IntentId, // associated loan ID
-			maxBorrowAmount : bidTerm.maxBorrowAmount, // max value amount
-			nft : bidTerm.nft
-		}); 
+		// LoanTerm memory loanTerm = LoanTerm ({
+		// 	rate : bidTerm.rate, // interest rate, annualized (APY)
+		// 	start : block.timestamp, // start date of loan
+		// 	duration : bidTerm.duration, // total duration of loan (in seconds)
+		// 	cvalue : bidTerm.cvalue, // collateral value (value of NFT at the time of the loan bid creation)
+		// 	lender : bidTerm.lender, //lender's address
+		// 	loanID : bidTerm.IntentId, // associated loan ID
+		// 	maxBorrowAmount : bidTerm.maxBorrowAmount, // max value amount
+		// 	nft : bidTerm.nft
+		// }); 
 
 		// uint256 loanID = getLoanId(address nft,
 		// uint256 tokenId,
@@ -322,26 +322,38 @@ contract SapLend {
 	// Borrower pays
 	function closeIntentToBorrow() public {
 		// Putting this comment to open up branch on GH, Jongwon leave comments here
-		AutoAcceptLoanTerm memory aaLoanTerm = autoAcceptLoanTerms[msg.sender];
-		require(aaLoanTerm.burrower != address(0), "User does not have an open intent to burrow!"); // Ask Jongwon to make sure this is doing what is should
-		require(aaLoanTerm.burrower == msg.sender, "The user can only close out their own intentToBurrows");
+		uint256 borrowIntentId = burrowIntentIds[msg.sender];
+		require (borrowIntentId != 0, "User does not have an open intent to burrow!");
+		
+		AutoAcceptLoanTerm memory aaLoanTerm = autoAcceptLoanTerms[borrowIntentId];
+
+		// this require might be redundant b/c I don't see how this ever could not be true
+		require(aaLoanTerm.borrower == msg.sender, "The user can only close out their own intentToBurrows");
+
+		// using storage to get reference
+		uint256[] storage openBids = activeLoanBidIds[msg.sender][borrowIntentId];
+		
+		// clearing all bids on this intentToBurrow ... how should we notify the lenders who have bidded?
+		while (openBids.length != 0) {
+			delete bidTerms[openBids[openBids.length - 1]]; // deleting bidTerm struct from mapping from bidTermIds to bidTerms
+			openBids.pop();
+		}
+
+		// deleting (reseting) aaloanterm struct and the intentId
+		delete autoAcceptLoanTerms[borrowIntentId];
+		delete burrowIntentIds[msg.sender];
 
 
-
-		// STEPS
-
-		/* 
-		   
-		   1.  Iterate through the open bids on this intentToBurrow and close each . . .
-		   		a.  will have to make helper function for this b/c permissions will be different than close bid.  Burrower should be paying
-		  
-		   2.  Remove the loan from AALoanTerms
-
-		   3.  Remove the caller from burrowWannabes
-
-		*/
+		// has to be a better way to do this . . . O(n) rn.  Could do some mapping from address to array index
+		for (uint256 i = 0; i < borrowWannabes.length; ++i) {
+			if (msg.sender == borrowWannabes[i]) {
+				delete borrowWannabes[i];
+				break;
+			}
+		}
 
 	}
+
 
 	// Manas
 	// Check if they have an active bid
