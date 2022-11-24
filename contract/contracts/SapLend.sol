@@ -53,7 +53,7 @@ struct BidTerm {
     uint256 cvalue; // collateral value (value of NFT at the time of the loan bid creation)
     uint256 cratio; // collateral ratio
     address lender; //lender's address
-    uint256 IntentId; // associated loan ID
+    uint256 intentId; // associated loan ID
     uint256 maxBorrowAmount; // max value amount
 	address nft; // nft address
 	uint256 tokenId;
@@ -87,27 +87,31 @@ contract SapLend {
 	/// @dev List of active loan IDs
 	uint256[] public activeLoanIds;
 
+	/// @dev active list of users who want to borrow
+	address[] public borrowWannabes;
+
 	/// @dev Mapping of loan ID to active loan term
 	mapping(uint256 => LoanTerm) public activeLoans;
 
 	/// @dev Mapping of Bid Term ID to BidTerm
-	mapping (uint256 => BidTerm) public BidTerms;
+	mapping (uint256 => BidTerm) public bidTerms;
 
 	/// @dev Loan term that borrower will auto-accept (executed by the contract)
-	//  burrower address => auto-accept loan term
-	mapping(address => AutoAcceptLoanTerm) public autoAcceptLoanTerms;
+	/// @dev Mapping of Burrow Intent Ids to AutoAcceptLoanTerms
+	mapping (uint256 => AutoAcceptLoanTerm) public autoAcceptLoanTerms;
 
-	/// @dev List of active loan bids - not supporting multiple bids yet
-	// uint256[] public activeLoanBidIds;
-
-	/// @dev Mapping of loan ID to available bids (proposed by lenders)
-	mapping(address => mapping(uint256 => uint256)) public activeLoanBidIds;
+	//  burrower address => Burrower Intent Id(s) - not supporting multiple intents yet
+	//  why is structure of this one different from others . . . not doing Id hashing here?
+	mapping(address => uint256) public burrowIntentIds;
 
 	/// @dev Mapping of bidder address to their BidTerm ID - not supporting multiple bids yet
 	mapping (address => uint256) userActiveBidId;
 
-	/// @dev active list of users who want to borrow
-	address[] public borrowWannabes;
+	/// @dev Mapping of address to mapping of intent ID to array of available bids Ids(proposed by lenders)
+	// not sure we even need the double mapping with the burrower address
+	mapping(address => mapping(uint256 => uint256[])) public activeLoanBidIds;
+
+
 
 	event LoanCreated(uint256 indexed loanId, address nft, uint256 tokenId, uint256 interest, uint256 startTime, uint256 borrowed);
 
@@ -159,8 +163,9 @@ contract SapLend {
 		require(uint(minDuration) <= uint(minDuration), 'Min duration <= Max Duration');
 
 		// Antony is adding this CHECK TO MAKE SURE WE NEED THIS
-		uint256 healthFactor = requestedAmount / cvalue;
-		require (healthFactor <= cvalue, "Can't burrow that much based on inputs for cvalue and cratio!");
+		// also check magnitude conversion
+		uint256 healthFactor = (requestedAmount / cvalue) * 10000;
+		require (healthFactor <= cratio, "Can't burrow that much based on inputs for cvalue and cratio!");
 		
 		// 1) Register borrower's intent to borrow
         address borrower = msg.sender;
@@ -189,8 +194,12 @@ contract SapLend {
 			tokenId: tokenId
 		});
 	
-		// uint256 IntentId = getLoanId(nft, tokenId, borrower, minDuration, block.timestamp);
-		autoAcceptLoanTerms[msg.sender] = aaLoanTerm;
+		uint256 intentId = getLoanId(nft, tokenId, borrower, minDuration, block.timestamp);
+
+		autoAcceptLoanTerms[intentId] = aaLoanTerm;
+		burrowIntentIds[msg.sender] = intentId;
+
+		
 	}
 
 	/// @dev Lender comes in and makes a bid to give the borrower x amount of money
@@ -198,15 +207,19 @@ contract SapLend {
 	function makeBid( // ie., bidLoanTermForBorrower
 		uint256 rate,
 		Duration duration,
-		uint256 value,
+		uint256 cvalue,
 		uint256 cratio,
-		uint256 IntentId, // forgot why we put this . . .
+		uint256 intentId, // forgot why we put this . . .
 		uint256 maxBorrowAmount,
-		address burrower,
+		address borrower,
 		address nft,
 		uint256 tokenId
 	) public {
 		require(rate <= rateCap(), 'Exceeds rate cap!');
+
+		// check magnitude conversion
+		uint256 healthFactor = (maxBorrowAmount / cvalue) * 10000;
+		require (healthFactor <= cratio, "Can't lend that much based on inputs for cvalue and cratio!");
 
 		require(userActiveBidId[msg.sender] == 0); // makes sure that the bidder (the lender) doesn't already have an open bid
 
@@ -214,16 +227,16 @@ contract SapLend {
 			 rate: rate,
 			 proposedTime: block.timestamp, // start is when loan is accepted by borrower
 			 duration: duration,
-			 cvalue: value, // value of NFT
+			 cvalue: cvalue, // value of NFT
 			 cratio: cratio,
 			 lender: msg.sender,
-			 IntentId: IntentId,
+			 intentId: intentId,
 			 maxBorrowAmount: maxBorrowAmount,
 			 nft: nft,
 			 tokenId : tokenId
 		});
 
-		AutoAcceptLoanTerm memory aaLoanTerm = autoAcceptLoanTerms[burrower];
+		AutoAcceptLoanTerm memory aaLoanTerm = autoAcceptLoanTerms[intentId];
 
 		uint256 BidTermId = getBidTermId(
 			aaLoanTerm.nft,
@@ -238,10 +251,13 @@ contract SapLend {
 
 
 		// adding to mapping from bidTermId to bidterm structs
-		BidTerms[BidTermId] = bidterm;
+		bidTerms[BidTermId] = bidterm;
 
-		// adding to activeLoanBids . . . don't love this name
-		activeLoanBidIds[burrower][BidTermId] = BidTermId;
+		// getting reference to the array where available bids are stored (storage keyword gets reference)
+		uint256[] storage availableBids = activeLoanBidIds[borrower][intentId];
+
+		// adding bid term Id to available Bids
+		availableBids.push(BidTermId);
 
 	}
 
@@ -310,6 +326,20 @@ contract SapLend {
 		require(aaLoanTerm.burrower != address(0), "User does not have an open intent to burrow!"); // Ask Jongwon to make sure this is doing what is should
 		require(aaLoanTerm.burrower == msg.sender, "The user can only close out their own intentToBurrows");
 
+
+
+		// STEPS
+
+		/* 
+		   
+		   1.  Iterate through the open bids on this intentToBurrow and close each . . .
+		   		a.  will have to make helper function for this b/c permissions will be different than close bid.  Burrower should be paying
+		  
+		   2.  Remove the loan from AALoanTerms
+
+		   3.  Remove the caller from burrowWannabes
+
+		*/
 
 	}
 
