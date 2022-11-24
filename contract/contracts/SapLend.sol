@@ -100,11 +100,10 @@ contract SapLend {
 	/// @dev Mapping of Burrow Intent Ids to AutoAcceptLoanTerms
 	mapping (uint256 => AutoAcceptLoanTerm) public autoAcceptLoanTerms;
 
-	//  burrower address => Burrower Intent Id(s) - not supporting multiple intents yet
-	//  why is structure of this one different from others . . . not doing Id hashing here?
+	/// @dev burrower address => Burrower Intent Id(s) - not supporting multiple intents yet
 	mapping(address => uint256) public burrowIntentIds;
 
-	/// @dev Mapping of bidder address to their BidTerm ID - not supporting multiple bids yet
+	/// @dev Mapping of bidder address to their BidTerm ID(s) - not supporting multiple bids yet
 	mapping (address => uint256) userActiveBidId;
 
 	/// @dev Mapping of address to mapping of intent ID to array of available bids Ids(proposed by lenders)
