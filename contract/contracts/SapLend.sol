@@ -253,7 +253,7 @@ contract SapLend {
 		bidTerms[BidTermId] = bidterm;
 
 		// getting reference to the array where available bids are stored (storage keyword gets reference)
-		uint256[] storage openBids = activeLoanBidIds[borrower][intentId];
+		uint256[] storage openBids = activeLoanBidIds[defaultborrower][intentId];
 
 		// adding bid term Id to available Bids
 		openBids.push(BidTermId);
@@ -310,6 +310,7 @@ contract SapLend {
 		// activeLoanIds.push(loanBidId);
 	}
 
+
 	// Kevin
 	function closeLoan() public {
 
@@ -351,6 +352,52 @@ contract SapLend {
 			}
 		}
 
+	}
+	
+	function fill(uint256 intentId) public {
+		// makes sure that the bidder (the lender) doesn't already have an open bid
+		require(userActiveBidId[msg.sender] == 0); 
+
+		//fill bid with info from auto accept loans
+		AutoAcceptLoanTerm memory defaultBid = autoAcceptLoanTerms[intentId];
+
+		BidTerm memory bidterm = BidTerm({
+			 rate: defaultBid.rate,
+			 proposedTime: block.timestamp, // start is when loan is accepted by borrower
+			 duration: defaultBid.maxDuration,
+			 cvalue: defaultBid.cvalue, // value of NFT
+			 cratio: defaultBid.cratio,
+			 lender: msg.sender,
+			 intentId: burrowIntentIds[defaultBid.borrower],
+			 maxBorrowAmount: defaultBid.requestedAmount,
+			 nft: defaultBid.nft,
+			 tokenId : defaultBid.tokenId
+		});
+		
+		//check if rate cap exceeded
+		require(bidterm.rate <= rateCap(), 'Exceeds rate cap!');
+
+		//double check health 
+		uint256 healthFactor = (bidterm.maxBorrowAmount / bidterm.cvalue) * 10000;
+		require (healthFactor <= bidterm.cratio, "Can't lend that much based on inputs for cvalue and cratio!");
+
+		uint256 BidTermId = getBidTermId(
+			bidterm.nft,
+			bidterm.tokenId,
+			msg.sender,
+			bidterm.duration,
+			bidterm.maxBorrowAmount,
+			block.timestamp
+		);
+
+		// adding to mapping from bidTermId to bidterm struct
+		bidTerms[BidTermId] = bidterm;
+
+		// getting reference to the array where available bids are stored (storage keyword gets reference)
+		uint256[] storage openBids = activeLoanBidIds[defaultBid.borrower][intentId];
+
+		// adding bid term Id to available Bids
+		openBids.push(BidTermId);
 	}
 
 
