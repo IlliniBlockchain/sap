@@ -311,8 +311,36 @@ contract SapLend {
 	}
 
 	// Kevin
-	function closeLoan() public {
+	function closeLoan(uint256 loanId) public {
+		/*
+			Where user closes loan before the agreement date.
+			User has to pay interest for the entire loan period even though they close loan early
+			- Return NFT from our contract
+			- Burn reciept NFT 
+			- Calculate Interest owed
+			- Remove loanId from activeLoanIds
+		*/
 
+		// Get loanId associated with user trying to close loan
+
+		LoanTerm memory loanTerm = activeLoans[loanId];
+
+		// Transfer NFT from our contract back to lender
+		IERC721(loanTerm.nft).safeTransferFrom(address(this), loanTerm.lender, loanTerm.tokenId);	
+
+		// Burn Receipt NFT from lender? I dont think we did this actually
+		// Do some interest stuff idrk - Maybe something like: APY * duration - ((APY / 12) * (block.timestamp - start)) 
+
+		// Remove loanId from activeLoanIds...needs optimization
+		for (uint256 i = 0; i < activeLoanIds.length; ++i) {
+			if (loanId == activeLoanIds[i]) {
+				delete activeLoanIds[i];
+				break;
+			}
+		}
+
+		// Remove closed loan from activeLoans
+		delete activeLoans[loanId];
 	}
 
 	// Antony
