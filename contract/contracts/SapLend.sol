@@ -311,7 +311,7 @@ contract SapLend {
 	}
 
 	// Kevin
-	function closeLoan() public {
+	function closeLoan(uint256 loanId) public {
 		/*
 			Where user closes loan before the agreement date.
 			User has to pay interest for the entire loan period even though they close loan early
@@ -322,7 +322,7 @@ contract SapLend {
 		*/
 
 		// Get loanId associated with user trying to close loan
-		uint256 loanId = 21;	// Not sure how to get loanId, 21 is placeholder
+
 		LoanTerm memory loanTerm = activeLoans[loanId];
 
 		// Transfer NFT from our contract back to lender
