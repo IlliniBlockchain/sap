@@ -262,7 +262,7 @@ contract SapLend {
 
 	/// @dev Borrower accepts any loan term associated to their intent to borrow
 	function takeBid(
-		uint256 BidId
+		uint256 bidId
 	) public {
 		/*
 			uint256 rate; // interest rate, annualized (APY)
@@ -277,9 +277,21 @@ contract SapLend {
 			uint256 valuation;
 		*/
 
+		// first we assert that the bid is open to take
+
+		// retrieve the bid term
+		BidTerm memory bidTerm = bidTerms[bidId];
+
+		// assert that the bid is open
+
+		address burrower = bidTerm.burrower;
+		
+
 		// checking that the bid was not already taken . . . making sure it is still available for taking
 		uint256 loanId = activeLoans[BidId].loanId;
 		require(loanId == 0, 'Loan already exists for the ID.');
+
+
 
 
 		// making sure that burrower can take this bid
@@ -290,16 +302,16 @@ contract SapLend {
 
 		// TODO: actual borrowing part
 
-		// LoanTerm memory loanTerm = LoanTerm ({
-		// 	rate : bidTerm.rate, // interest rate, annualized (APY)
-		// 	start : block.timestamp, // start date of loan
-		// 	duration : bidTerm.duration, // total duration of loan (in seconds)
-		// 	cvalue : bidTerm.cvalue, // collateral value (value of NFT at the time of the loan bid creation)
-		// 	lender : bidTerm.lender, //lender's address
-		// 	loanID : bidTerm.IntentId, // associated loan ID
-		// 	maxBorrowAmount : bidTerm.maxBorrowAmount, // max value amount
-		// 	nft : bidTerm.nft
-		// }); 
+		LoanTerm memory loanTerm = LoanTerm ({
+			rate : bidTerm.rate, // interest rate, annualized (APY)
+			start : block.timestamp, // start date of loan
+			duration : bidTerm.duration, // total duration of loan (in seconds)
+			cvalue : bidTerm.cvalue, // collateral value (value of NFT at the time of the loan bid creation)
+			lender : bidTerm.lender, //lender's address
+			loanID : bidTerm.IntentId, // associated loan ID
+			maxBorrowAmount : bidTerm.maxBorrowAmount, // max value amount
+			nft : bidTerm.nft
+		}); 
 
 		// uint256 loanID = getLoanId(address nft,
 		// uint256 tokenId,
