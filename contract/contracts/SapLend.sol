@@ -31,6 +31,8 @@ enum Duration {
 	days180 // 180 days
 }
 
+
+
 // TODO HAVE TO ADD TOKEN IDs to all of these  . . .
 
 struct LoanTerm {
@@ -109,8 +111,6 @@ contract SapLend {
 	/// @dev Mapping of address to mapping of intent ID to array of available bids Ids(proposed by lenders)
 	//  not sure we even need the double mapping with the burrower address
 	mapping(address => mapping(uint256 => uint256[])) public activeLoanBidIds;
-
-
 
 	event LoanCreated(uint256 indexed loanId, address nft, uint256 tokenId, uint256 interest, uint256 startTime, uint256 borrowed);
 
@@ -288,7 +288,7 @@ contract SapLend {
 		
 
 		// checking that the bid was not already taken . . . making sure it is still available for taking
-		uint256 loanId = activeLoans[BidId].loanId;
+		uint256 loanId = activeLoans[bidId].loanId;
 		require(loanId == 0, 'Loan already exists for the ID.');
 
 
@@ -298,7 +298,6 @@ contract SapLend {
 		AutoAcceptLoanTerm memory aaLoanTerm = autoAcceptLoanTerms[loanId];
 		require(msg.sender == aaLoanTerm.borrower, 'Sender is not the initiated borrower.'); 
 
-		// BidTerm memory bidTerm = activeLoanBidIds[aaLoanTerm.burrower][BidId];
 
 		// TODO: actual borrowing part
 
@@ -438,6 +437,18 @@ contract SapLend {
 
 		// adding bid term Id to available Bids
 		openBids.push(BidTermId);
+	}
+
+	function viewIntentsToBorrow() public view returns (AutoAcceptLoanTerm[] memory activeLoanTerm) {
+		AutoAcceptLoanTerm[] memory toReturn;
+
+		for (uint i = 0; i < borrowWannabes.length; ++i) {
+			uint256 AutoAcceptId = burrowIntentIds[borrowWannabes[i]];
+			AutoAcceptLoanTerm memory toInsert = autoAcceptLoanTerms[AutoAcceptId];
+			toReturn.push(toInsert);
+		}
+
+		return toReturn;
 	}
 
 
